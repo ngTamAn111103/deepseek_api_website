@@ -1,14 +1,18 @@
+// Import các hooks cần thiết từ React và các icon từ Heroicons
 import { useState, useEffect, useRef } from 'react';
 import { PaperAirplaneIcon, BeakerIcon, ChatBubbleBottomCenterTextIcon } from '@heroicons/react/24/outline';
 
+// Component chính ChatContainer nhận vào props messages và onSendMessage
 export default function ChatContainer({ messages = [], onSendMessage }) {
-  const [input, setInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('deepseek-chat');
-  const [isSending, setIsSending] = useState(false);
-  const [isCreatingChat, setIsCreatingChat] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
-  const inputRef = useRef(null);
+  // Các state quản lý trạng thái của component
+  const [input, setInput] = useState(''); // Quản lý nội dung input
+  const [selectedModel, setSelectedModel] = useState('deepseek-chat'); // Quản lý model được chọn
+  const [isSending, setIsSending] = useState(false); // Trạng thái đang gửi tin nhắn
+  const [isCreatingChat, setIsCreatingChat] = useState(false); // Trạng thái đang tạo chat mới
+  const [showWelcome, setShowWelcome] = useState(true); // Hiển thị màn hình chào mừng
+  const inputRef = useRef(null); // Ref để focus vào input
 
+  // Effect theo dõi thay đổi của messages để hiển thị/ẩn màn hình chào mừng
   useEffect(() => {
     if (messages.length === 0) {
       setShowWelcome(true);
@@ -17,9 +21,10 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
     }
   }, [messages]);
 
+  // Xử lý khi submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isSending) return;
+    if (!input.trim() || isSending) return; // Kiểm tra input rỗng hoặc đang gửi
 
     const messageToSend = input.trim();
     const modelToUse = selectedModel;
@@ -27,13 +32,14 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
     try {
       setIsSending(true);
       if (messages.length === 0) {
-        setIsCreatingChat(true);
+        setIsCreatingChat(true); // Hiển thị trạng thái tạo chat mới
       }
       
       const success = await onSendMessage(messageToSend, modelToUse);
       if (success) {
-        setInput('');
+        setInput(''); // Reset input
         setShowWelcome(false);
+        // Focus lại vào input sau khi gửi
         setTimeout(() => {
           inputRef.current?.focus();
         }, 0);
@@ -46,8 +52,9 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
     }
   };
 
+  // Xử lý sự kiện nhấn phím
   const handleKeyDown = (e) => {
-    // Ngăn chặn hành vi submit mặc định khi nhấn Enter
+    // Gửi tin nhắn khi nhấn Enter (không phải Shift + Enter)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -56,7 +63,9 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
 
   return (
     <div className="flex h-full flex-col bg-gray-50">
+      {/* Phần hiển thị tin nhắn */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Hiển thị màn hình chào mừng khi chưa có tin nhắn */}
         {showWelcome && messages.length === 0 ? (
           <div className="flex flex-1 items-center justify-center h-full">
             <div className="text-center transform transition-all duration-500 ease-out">
@@ -70,6 +79,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Hiển thị loading khi đang tạo chat mới */}
             {isCreatingChat && (
               <div className="flex justify-center py-4">
                 <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary-50 text-primary-600">
@@ -81,6 +91,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
                 </div>
               </div>
             )}
+            {/* Hiển thị danh sách tin nhắn */}
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -101,16 +112,23 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
                 </div>
               </div>
             ))}
+            {/* Tin nhắn giả từ đối phương */}
+            <div className="flex justify-start">
+              <div className="max-w-[70%] rounded-lg px-4 py-2 shadow-sm transform transition-all duration-300 ease-out bg-white text-gray-900 animate-message-in-left">
+                Xin chào! Tôi là trợ lý AI DeepSeek. Tôi có thể giúp gì cho bạn hôm nay?
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Input form */}
+      {/* Phần form nhập tin nhắn */}
       <div className="border-t border-gray-200 bg-white p-4">
         <form onSubmit={handleSubmit} className="chat-form mx-auto max-w-4xl">
           <div className="flex flex-col space-y-3">
-            {/* Model selector */}
+            {/* Phần chọn model */}
             <div className="inline-flex justify-center rounded-lg bg-gray-100 p-1">
+              {/* Nút chọn model Chat */}
               <button
                 type="button"
                 onClick={() => setSelectedModel('deepseek-chat')}
@@ -124,6 +142,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
                 <ChatBubbleBottomCenterTextIcon className="h-4 w-4" />
                 <span>Chat</span>
               </button>
+              {/* Nút chọn model Reasoner */}
               <button
                 type="button"
                 onClick={() => setSelectedModel('deepseek-reasoner')}
@@ -139,9 +158,10 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
               </button>
             </div>
 
-            {/* Input and send button */}
+            {/* Phần input và nút gửi */}
             <div className="flex items-center space-x-4">
               <div className="relative flex-1">
+                {/* Input nhập tin nhắn */}
                 <input
                   ref={inputRef}
                   type="text"
@@ -157,6 +177,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
                   disabled={isSending}
                   autoFocus
                 />
+                {/* Hiển thị icon và tên model đang chọn */}
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-1">
                   {selectedModel === 'deepseek-chat' ? (
                     <ChatBubbleBottomCenterTextIcon className="h-4 w-4 text-blue-400" />
@@ -172,6 +193,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
                   </span>
                 </div>
               </div>
+              {/* Nút gửi tin nhắn */}
               <button
                 type="submit"
                 className={`btn flex items-center space-x-2 min-w-[100px] ${

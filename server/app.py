@@ -4,7 +4,7 @@ import mysql.connector
 from CONFIG import Config
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-
+from openai import OpenAI
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
@@ -127,6 +127,63 @@ def get_users():
     finally:
         if conn:
             conn.close()
+
+def read_api_key(path='API_KEY.txt'):
+    """
+    Reads the API key from a file.
+
+    Args:
+        path: The path to the file containing the API key.
+
+    Returns:
+        The API key as a string, or None if the file does not exist or is empty.
+    """
+    try:
+        with open(path, 'r') as f:
+            api_key = f.read().strip()
+            if not api_key:
+                print(f"Warning: API key file '{path}' is empty.")
+                return None
+            return api_key
+    except FileNotFoundError:
+        print(f"Error: API key file not found at '{path}'.")
+        return None
+    
+# API Chat deepseek
+@app.route('/api/deepseek', methods=['POST'])
+def deepseek_api():
+    # Lấy dữ liệu JSON từ request
+    data = request.get_json()
+    user_text = data.get('text')
+    if not user_text:
+        return jsonify({'error': 'Chưa cung cấp text'}), 400
+    print(user_text)
+    try:
+        # Đọc API key từ file
+        api_key = read_api_key()
+        if not api_key:
+            return jsonify({'error': 'API key không tồn tại'}), 500
+
+        # Tạo client cho Deepseek
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+
+        # Gọi API của Deepseek với text người dùng gửi
+        response = client.chat.completions.create(
+            model="deepseek-reasoner",
+            messages=[
+                {"role": "system", "content": "You are a front end programmer"},
+                {"role": "user", "content": user_text},
+            ],
+            stream=False
+        )
+        answer = response.choices[0].message.content
+
+        return jsonify({'response': answer})
+
+    except Exception as e:
+        print("Deepseek API error:", e)
+        return jsonify({'error': 'Lỗi khi xử lý yêu cầu'}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
