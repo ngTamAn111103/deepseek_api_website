@@ -10,6 +10,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
   const [isSending, setIsSending] = useState(false); // Trạng thái đang gửi tin nhắn
   const [isCreatingChat, setIsCreatingChat] = useState(false); // Trạng thái đang tạo chat mới
   const [showWelcome, setShowWelcome] = useState(true); // Hiển thị màn hình chào mừng
+  const [chatMessages, setChatMessages] = useState([]); // Lưu trữ tin nhắn chat
   const inputRef = useRef(null); // Ref để focus vào input
 
   // Effect theo dõi thay đổi của messages để hiển thị/ẩn màn hình chào mừng
@@ -20,6 +21,26 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
       setShowWelcome(false);
     }
   }, [messages]);
+
+  // Hàm xử lý định dạng code trong tin nhắn
+  const formatMessage = (content) => {
+    // Tìm các đoạn code trong dấu ```
+    const parts = content.split(/(```[\s\S]*?```)/g);
+    
+    return parts.map((part, index) => {
+      if (part.startsWith('```') && part.endsWith('```')) {
+        // Xử lý phần code
+        const code = part.slice(3, -3);
+        return (
+          <pre key={index} className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto my-2">
+            <code>{code}</code>
+          </pre>
+        );
+      }
+      // Xử lý phần text thường
+      return <span key={index} className="whitespace-pre-wrap">{part}</span>;
+    });
+  };
 
   // Xử lý khi submit form
   const handleSubmit = async (e) => {
@@ -34,16 +55,44 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
       if (messages.length === 0) {
         setIsCreatingChat(true); // Hiển thị trạng thái tạo chat mới
       }
+
+      // Thêm tin nhắn người dùng vào state
+      const userMessage = {
+        role: 'user',
+        content: messageToSend,
+        model: modelToUse
+      };
+      setChatMessages(prev => [...prev, userMessage]);
+
+      // Gọi API
+      const response = await fetch('http://localhost:5000/api/deepseek', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: messageToSend,
+        })
+      });
+
+      const data = await response.json();
+
+      // Thêm phản hồi từ AI vào state
+      const aiMessage = {
+        role: 'assistant',
+        content: data.response,
+        model: modelToUse
+      };
+      setChatMessages(prev => [...prev, aiMessage]);
+
+      setInput('');
+      setShowWelcome(false);
       
-      const success = await onSendMessage(messageToSend, modelToUse);
-      if (success) {
-        setInput(''); // Reset input
-        setShowWelcome(false);
-        // Focus lại vào input sau khi gửi
-        setTimeout(() => {
-          inputRef.current?.focus();
-        }, 0);
-      }
+      // Focus lại vào input sau khi gửi
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+
     } catch (error) {
       console.error('Lỗi khi gửi tin nhắn:', error);
     } finally {
@@ -66,7 +115,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
       {/* Phần hiển thị tin nhắn */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Hiển thị màn hình chào mừng khi chưa có tin nhắn */}
-        {showWelcome && messages.length === 0 ? (
+        {showWelcome && chatMessages.length === 0 ? (
           <div className="flex flex-1 items-center justify-center h-full">
             <div className="text-center transform transition-all duration-500 ease-out">
               <h3 className="text-xl font-semibold text-gray-900">
@@ -92,7 +141,7 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
               </div>
             )}
             {/* Hiển thị danh sách tin nhắn */}
-            {messages.map((message, index) => (
+            {chatMessages.map((message, index) => (
               <div
                 key={index}
                 className={`flex ${
@@ -108,16 +157,10 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
                       : 'bg-white text-gray-900 animate-message-in-left'
                     }`}
                 >
-                  {message.content}
+                  {formatMessage(message.content)}
                 </div>
               </div>
             ))}
-            {/* Tin nhắn giả từ đối phương */}
-            <div className="flex justify-start">
-              <div className="max-w-[70%] rounded-lg px-4 py-2 shadow-sm transform transition-all duration-300 ease-out bg-white text-gray-900 animate-message-in-left">
-                Xin chào! Tôi là trợ lý AI DeepSeek. Tôi có thể giúp gì cho bạn hôm nay?
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -212,4 +255,4 @@ export default function ChatContainer({ messages = [], onSendMessage }) {
       </div>
     </div>
   );
-} 
+}

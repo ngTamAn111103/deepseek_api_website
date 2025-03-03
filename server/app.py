@@ -1,3 +1,4 @@
+# Viết api cho client
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import mysql.connector
@@ -169,7 +170,7 @@ def deepseek_api():
 
         # Gọi API của Deepseek với text người dùng gửi
         response = client.chat.completions.create(
-            model="deepseek-reasoner",
+            model="deepseek-chat",
             messages=[
                 {"role": "system", "content": "You are a front end programmer"},
                 {"role": "user", "content": user_text},
