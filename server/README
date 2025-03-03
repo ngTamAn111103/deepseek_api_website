@@ -1,1 +1,1 @@
-pip install mysql-connector-python python-dotenv openai
+pip install flask flask-cors mysql-connector-python python-dotenv openai google-auth
