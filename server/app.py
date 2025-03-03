@@ -3,9 +3,14 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import mysql.connector
 from CONFIG import Config
-from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from openai import OpenAI
+from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash
+import jwt
+from datetime import datetime, timedelta
+
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
@@ -26,108 +31,6 @@ def get_db_connection():
 # Google OAuth2 client ID
 GOOGLE_CLIENT_ID = '978174562297-0chrdrf37tm0ftt7cri62oco0esuklm9.apps.googleusercontent.com'
 
-# API endpoint for Google login/signup
-@app.route('/api/auth/google', methods=['POST'])
-def google_login():
-    token = request.json.get('token')
-    if not token:
-        return jsonify({'error': 'Token is required'}), 400
-
-    try:
-        # Verify the token with Google
-        idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
-
-        # Check if the token is valid and issued by Google
-        if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-            raise ValueError('Wrong issuer.')
-
-        # Extract user information from the token
-        user_id = idinfo['sub']
-        email = idinfo['email']
-        name = idinfo.get('name', '')
-        picture = idinfo.get('picture', '')
-
-        # Connect to the database
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({'error': 'Database connection failed'}), 500
-
-        cursor = conn.cursor(dictionary=True)
-
-        # Check if the user already exists
-        cursor.execute("SELECT * FROM users WHERE google_id = %s", (user_id,))
-        user = cursor.fetchone()
-
-        if not user:
-            # If the user does not exist, create a new user
-            cursor.execute(
-                "INSERT INTO users (google_id, email, name, picture) VALUES (%s, %s, %s, %s)",
-                (user_id, email, name, picture)
-            )
-            conn.commit()
-            user_id = cursor.lastrowid
-            user = {
-                'id': user_id,
-                'google_id': user_id,
-                'email': email,
-                'name': name,
-                'picture': picture
-            }
-        else:
-            # If the user exists, return the existing user
-            user = {
-                'id': user['id'],
-                'google_id': user['google_id'],
-                'email': user['email'],
-                'name': user['name'],
-                'picture': user['picture']
-            }
-
-        # Generate a token (you can use JWT or any other method to generate a token)
-        # For simplicity, we'll just return a dummy token
-        token = 'dummy_token'
-
-        # Return the token and user information
-        return jsonify({
-            'success': True,
-            'token': token,
-            'user': user
-        })
-
-    except ValueError as e:
-        # Invalid token
-        return jsonify({'error': 'Invalid token', 'details': str(e)}), 401
-    except Exception as e:
-        # Other errors
-        print("Error:", e)
-        return jsonify({'error': 'Internal server error'}), 500
-    finally:
-        if conn:
-            conn.close()
-
-# Test route
-@app.route('/api/test', methods=['GET'])
-def test_connection():
-    return jsonify({'message': 'Backend is working!'})
-
-# Sample API endpoint
-@app.route('/api/users', methods=['GET'])
-def get_users():
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
-
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users")
-        results = cursor.fetchall()
-        return jsonify(results)
-    except Exception as e:
-        print("Query error:", e)
-        return jsonify({'error': 'Database query failed'}), 500
-    finally:
-        if conn:
-            conn.close()
 
 def read_api_key(path='API_KEY.txt'):
     """
@@ -149,42 +52,180 @@ def read_api_key(path='API_KEY.txt'):
     except FileNotFoundError:
         print(f"Error: API key file not found at '{path}'.")
         return None
-    
-# API Chat deepseek
-@app.route('/api/deepseek', methods=['POST'])
-def deepseek_api():
-    # Lấy dữ liệu JSON từ request
+
+# Đăng ký
+@app.route('/register', methods=['POST'])
+def register():
+    # {"email":"user@example.com", "password":"your_strong_password"}
     data = request.get_json()
-    user_text = data.get('text')
-    if not user_text:
-        return jsonify({'error': 'Chưa cung cấp text'}), 400
-    print(user_text)
+    email = data.get('email')
+    password = data.get('password')
+
+    # Nếu không có trường email/password
+    if not email or not password:
+        return jsonify({
+            'success': False,
+            'message': 'Email và password là bắt buộc'
+        }), 400
+
+    # kết nối tới db
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
     try:
-        # Đọc API key từ file
-        api_key = read_api_key()
-        if not api_key:
-            return jsonify({'error': 'API key không tồn tại'}), 500
+        cursor = conn.cursor(dictionary=True)
+        
+        # Kiểm tra email tồn tại
+        cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+        if cursor.fetchone():
+            return jsonify({
+                'success': False,
+                'message': 'Email đã được đăng ký'
+            }), 400
 
-        # Tạo client cho Deepseek
-        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        # Hash password và tạo fullname từ email
+        hashed_password = generate_password_hash(password)
+        fullname = email  # Gán fullname bằng email ban đầu
 
-        # Gọi API của Deepseek với text người dùng gửi
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "You are a front end programmer"},
-                {"role": "user", "content": user_text},
-            ],
-            stream=False
+        # Thêm user mới
+        cursor.execute(
+            """INSERT INTO users (fullname, email, password_hash)
+               VALUES (%s, %s, %s)""",
+            (fullname, email, hashed_password)
         )
-        answer = response.choices[0].message.content
+        conn.commit()
 
-        return jsonify({'response': answer})
+        # Lấy thông tin user vừa tạo
+        cursor.execute(
+            """SELECT id, fullname, email, balance, created_at 
+               FROM users WHERE id = %s""",
+            (cursor.lastrowid,)
+        )
+        new_user = cursor.fetchone()
 
+        # Format lại thời gian
+        new_user['created_at'] = new_user['created_at'].isoformat()
+
+        return jsonify({
+            'success': True,
+            'message': 'Đăng ký thành công',
+            'user': new_user
+        }), 201
+
+    except mysql.connector.Error as err:
+        conn.rollback()
+        print("Database error:", err)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi database'
+        }), 500
     except Exception as e:
-        print("Deepseek API error:", e)
-        return jsonify({'error': 'Lỗi khi xử lý yêu cầu'}), 500
+        conn.rollback()
+        print("Error:", e)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi server'
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
+# Đăng nhập
+# Thêm secret key vào config (nên đặt trong file Config.py)
+app.config['SECRET_KEY'] = Config.SECRET_KEY
+@app.route('/login', methods=['POST'])
+def login():
+    # {"email":"user@example2.com", "password":"your_strong_password"}
+    """Đăng nhập bằng email và password"""
+    # Lấy thông tin từ request
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    # Validate input
+    if not email or not password:
+        return jsonify({
+            'success': False,
+            'message': 'Email và password là bắt buộc'
+        }), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Tìm user bằng email
+        cursor.execute(
+            """SELECT id, fullname, email, password_hash, 
+                      balance, created_at, updated_at 
+               FROM users WHERE email = %s""",
+            (email,)
+        )
+        user = cursor.fetchone()
+
+        # Kiểm tra user tồn tại và password đúng
+        if not user or not check_password_hash(user['password_hash'], password):
+            return jsonify({
+                'success': False,
+                'message': 'Email hoặc mật khẩu không đúng'
+            }), 401
+
+        # Tạo JWT token
+        token = jwt.encode(
+            payload={
+                'user_id': user['id'],
+                'exp': datetime.utcnow() + timedelta(hours=24)
+            },
+            key=app.config['SECRET_KEY'],
+            algorithm='HS256'
+        )
+        # Chuyển token bytes sang string nếu cần
+        if isinstance(token, bytes):
+            token = token.decode('utf-8')
+
+        # Chuẩn bị dữ liệu user trả về
+        user_data = {
+            'id': user['id'],
+            'fullname': user['fullname'],
+            'email': user['email'],
+            'balance': float(user['balance']),
+            'created_at': user['created_at'].isoformat(),
+            'updated_at': user['updated_at'].isoformat() if user['updated_at'] else None
+        }
+
+        return jsonify({
+            'success': True,
+            'message': 'Đăng nhập thành công',
+            'user': user_data,
+            'token': token
+        }), 200
+
+    except mysql.connector.Error as err:
+        print("Database error:", err)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi database'
+        }), 500
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi server'
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True)
