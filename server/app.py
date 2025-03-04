@@ -9,6 +9,7 @@ from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 import jwt
 from datetime import datetime, timedelta
+import urllib.parse
 
 
 app = Flask(__name__)
@@ -286,5 +287,247 @@ def get_topup_packages():
         if conn.is_connected():
             cursor.close()
             conn.close()
+
+# Thêm route tạo giao dịch
+@app.route('/create-transaction', methods=['POST'])
+def create_transaction():
+    """Tạo mới một giao dịch nạp tiền"""
+    data = request.get_json()
+    
+    # Validate input
+    required_fields = ['user_id', 'payment_method']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({
+                'success': False,
+                'message': f'Thiếu trường bắt buộc: {field}'
+            }), 400
+
+    # Kiểm tra có package_id hoặc amount
+    if 'package_id' not in data and 'amount' not in data:
+        return jsonify({
+            'success': False,
+            'message': 'Cần cung cấp package_id hoặc amount'
+        }), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Kiểm tra user tồn tại
+        cursor.execute("SELECT id FROM users WHERE id = %s", (data['user_id'],))
+        if not cursor.fetchone():
+            return jsonify({
+                'success': False,
+                'message': 'User không tồn tại'
+            }), 404
+
+        # Xử lý amount
+        amount = None
+        if 'package_id' in data and data['package_id']:
+            # Lấy giá từ package
+            cursor.execute(
+                "SELECT package_price FROM topup_packages WHERE id = %s",
+                (data['package_id'],)
+            )
+            package = cursor.fetchone()
+            if not package:
+                return jsonify({
+                    'success': False,
+                    'message': 'Gói nạp không tồn tại'
+                }), 404
+            amount = float(package['package_price'])
+        else:
+            # Validate amount từ input
+            try:
+                amount = float(data['amount'])
+                if amount <= 0:
+                    raise ValueError
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Số tiền không hợp lệ'
+                }), 400
+
+        # Tạo transaction code nếu không có
+        transaction_code = data.get('transaction_code')
+        if transaction_code:
+            cursor.execute(
+                "SELECT id FROM transactions WHERE transaction_code = %s",
+                (transaction_code,)
+            )
+            if cursor.fetchone():
+                return jsonify({
+                    'success': False,
+                    'message': 'Mã giao dịch đã tồn tại'
+                }), 400
+
+        # Thêm giao dịch vào database
+        cursor.execute(
+            """INSERT INTO transactions (
+                user_id, 
+                package_id, 
+                amount, 
+                payment_method, 
+                status, 
+                transaction_code
+               ) VALUES (%s, %s, %s, %s, %s, %s)""",
+            (
+                data['user_id'],
+                data.get('package_id'),
+                amount,
+                data['payment_method'],
+                'pending',  # Trạng thái mặc định
+                transaction_code
+            )
+        )
+        conn.commit()
+
+        # Lấy thông tin giao dịch vừa tạo
+        cursor.execute(
+            """SELECT * FROM transactions WHERE id = %s""",
+            (cursor.lastrowid,)
+        )
+        new_transaction = cursor.fetchone()
+
+        # Format dữ liệu
+        new_transaction['amount'] = float(new_transaction['amount'])
+        new_transaction['created_at'] = new_transaction['created_at'].isoformat()
+        new_transaction['updated_at'] = new_transaction['updated_at'].isoformat()
+
+        return jsonify({
+            'success': True,
+            'message': 'Tạo giao dịch thành công',
+            'transaction': new_transaction
+        }), 201
+
+    except mysql.connector.Error as err:
+        conn.rollback()
+        print("Database error:", err)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi database: ' + str(err)
+        }), 500
+    except Exception as e:
+        conn.rollback()
+        print("Error:", e)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi server: ' + str(e)
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+# Khi người dùng nhấn giao dịch thành công
+@app.route('/confirm-transaction', methods=['POST'])
+def confirm_transaction():
+    """Xác nhận giao dịch thành công và cộng token cho user"""
+    data = request.get_json()
+    transaction_id = data.get('transaction_id')
+    transaction_code = data.get('transaction_code')
+
+    if not transaction_id and not transaction_code:
+        return jsonify({
+            'success': False,
+            'message': 'Cần cung cấp transaction_id hoặc transaction_code'
+        }), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # Tìm giao dịch
+        query = """SELECT * FROM transactions 
+                   WHERE status = 'pending' AND 
+                   (id = %s OR transaction_code = %s)"""
+        cursor.execute(query, (transaction_id, transaction_code))
+        transaction = cursor.fetchone()
+
+        if not transaction:
+            return jsonify({
+                'success': False,
+                'message': 'Giao dịch không tồn tại hoặc đã xử lý'
+            }), 404
+
+        # Tính toán số token cần cộng
+        tokens_to_add = 0
+        if transaction['package_id']:
+            # Lấy thông tin package
+            cursor.execute(
+                """SELECT base_tokens, bonus_tokens 
+                   FROM topup_packages 
+                   WHERE id = %s""",
+                (transaction['package_id'],))
+            package = cursor.fetchone()
+            tokens_to_add = package['base_tokens'] + package['bonus_tokens']
+        else:
+            # Tính token dựa trên amount (ví dụ: 1,000 VND = 1 token)
+            tokens_to_add = int(transaction['amount'] / 1000)
+
+        # Bắt đầu transaction
+        # conn.start_transaction()
+
+        # Cập nhật trạng thái giao dịch
+        cursor.execute(
+            """UPDATE transactions 
+               SET status = 'success', 
+                   updated_at = NOW() 
+               WHERE id = %s""",
+            (transaction['id'],))
+        
+        # Cộng token cho user
+        cursor.execute(
+            """UPDATE users 
+               SET balance = balance + %s 
+               WHERE id = %s""",
+            (tokens_to_add, transaction['user_id']))
+        
+        # Lấy số dư mới
+        cursor.execute(
+            """SELECT balance FROM users WHERE id = %s""",
+            (transaction['user_id'],))
+        new_balance = cursor.fetchone()['balance']
+
+        conn.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Cập nhật giao dịch thành công',
+            'new_balance': float(new_balance),
+            'transaction_id': transaction['id']
+        }), 200
+
+    except mysql.connector.Error as err:
+        conn.rollback()
+        print("Database error:", err)
+        return jsonify({
+            'success': False,
+            'message': f'Lỗi database: {err}'
+        }), 500
+    except Exception as e:
+        conn.rollback()
+        print("Error:", e)
+        return jsonify({
+            'success': False,
+            'message': f'Lỗi server: {e}'
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 if __name__ == '__main__':
     app.run(debug=True)
+
+

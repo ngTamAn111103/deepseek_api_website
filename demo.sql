@@ -1,64 +1,54 @@
 USE DEEPSEEK
 
-
-
--- Bảng người dùng
 CREATE TABLE users (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) NULL,
-    email VARCHAR(100) NOT NULL,
-    password_hash VARCHAR(255) NULL,users
-    provider ENUM('email', 'google') NOT NULL DEFAULT 'email',
-    provider_id VARCHAR(255),
-    avatar_url VARCHAR(255),
-    token_balance DECIMAL(15, 2) DEFAULT 0.00,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    UNIQUE KEY unique_provider_id (provider, provider_id),
-    UNIQUE KEY unique_email_provider (provider, email),
-    CONSTRAINT chk_auth_method CHECK (
-        (provider = 'email' AND password_hash IS NOT NULL AND provider_id IS NULL) OR
-        (provider = 'google' AND provider_id IS NOT NULL AND password_hash IS NULL)
-    )
-);
+    fullname VARCHAR(50) NOT NULL, -- Tên hiển thị
+    email VARCHAR(100) UNIQUE NOT NULL, -- email/tài khoản
+    password_hash VARCHAR(255) NOT NULL, -- mật khẩu 
+    balance DECIMAL(15,2) DEFAULT 0.00 CHECK (balance >= 0), -- số token người dùng đang có
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+DROP TABLE users;
 
 
--- Bảng giao dịch
+
+
+CREATE TABLE topup_packages (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    package_name VARCHAR(100) NOT NULL,  -- tên gói
+    package_price DECIMAL(15,2) NOT NULL CHECK (package_price > 0), -- giá gói
+    base_tokens INT NOT NULL CHECK (base_tokens > 0), -- token mặc định 
+    bonus_tokens INT DEFAULT 0 CHECK (bonus_tokens >= 0), -- token tặng kèm
+    is_active BOOLEAN DEFAULT TRUE, -- gói này có đang cho người dùng chọn không
+    isBestSeller BOOLEAN DEFAULT TRUE, -- thể hiện tính nên mua
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+DROP TABLE topup_packages;
+INSERT INTO topup_packages (
+    package_name,
+    package_price,
+    base_tokens,
+    bonus_tokens,
+    isBestSeller
+) VALUES 
+    ('Gói Trải Nghiệm', 10000, 1000000, 10000, False),
+    ('Gói Tiết Kiệm', 20000, 2850000, 50000, True),
+    ('Gói Lớn', 50000, 6250000, 100000, False);
+
+
+
 CREATE TABLE transactions (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT NOT NULL,
-    amount DECIMAL(15, 2) COMMENT 'Số tiền thực tế',
-    token_amount DECIMAL(15, 2) COMMENT 'Số token tương ứng',
-    transaction_type ENUM('deposit', 'token_purchase', 'api_usage') NOT NULL,
-    status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
-    description VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-
-
--- Bảng lịch sử API
-CREATE TABLE api_requests (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT NOT NULL,
-    tokens_used DECIMAL(10, 2) NOT NULL,
-    prompt TEXT NOT NULL,
-    response TEXT,
-    model_used VARCHAR(50),
-    request_params JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-
-
--- Bảng tỷ giá token (tuỳ chọn)
-CREATE TABLE token_rates (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    rate DECIMAL(15, 2) NOT NULL COMMENT 'Số token nhận được trên 1 đơn vị tiền',
-    effective_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN DEFAULT TRUE
-);
-
+    user_id INT NOT NULL, -- người nạp
+    package_id INT, -- khoá ngoại
+    amount DECIMAL(15,2) NOT NULL CHECK (amount >= 0), -- số tiền nạp (để đối chiếu với lúc nạp)
+    payment_method VARCHAR(50) NOT NULL,  -- phương thức nạp
+    status ENUM('pending', 'success', 'failed', 'refunded') DEFAULT 'pending',
+    transaction_code VARCHAR(255) UNIQUE, -- lúc api check ok thì bỏ vào đây
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (package_id) REFERENCES topup_packages(id) ON DELETE SET NULL
+) ENGINE=InnoDB;

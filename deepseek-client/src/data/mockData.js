@@ -1,18 +1,14 @@
-export const mockUser = {
-  name: "Nguyễn Văn A",
-  email: "example@email.com",
-  avatar: "https://ui-avatars.com/api/?name=Nguyễn+Văn+A&background=0D9488&color=fff",
-  tokenBalance: 1000
-};
-
+// Dữ liệu mẫu cho danh sách chat
 export const mockChats = [
   {
     id: 1,
+    userId: 1,
     title: "Hỏi về React và Next.js",
     timestamp: "2024-03-03T10:00:00Z",
     messages: [
       {
         id: 1,
+        userId: 1,
         content: "Tôi muốn tìm hiểu về React và Next.js",
         role: "user",
         timestamp: "2024-03-03T10:00:00Z"
@@ -27,11 +23,13 @@ export const mockChats = [
   },
   {
     id: 2,
+    userId: 1,
     title: "Tư vấn về AI và Machine Learning",
     timestamp: "2024-03-02T15:30:00Z",
     messages: [
       {
         id: 3,
+        userId: 1,
         content: "Bạn có thể giải thích về AI và Machine Learning không?",
         role: "user",
         timestamp: "2024-03-02T15:30:00Z"
@@ -46,11 +44,13 @@ export const mockChats = [
   },
   {
     id: 3,
+    userId: 1,
     title: "Hướng dẫn về Tailwind CSS",
     timestamp: "2024-03-01T09:15:00Z",
     messages: [
       {
         id: 5,
+        userId: 1,
         content: "Làm thế nào để sử dụng Tailwind CSS hiệu quả?",
         role: "user",
         timestamp: "2024-03-01T09:15:00Z"
@@ -65,11 +65,13 @@ export const mockChats = [
   },
   {
     id: 4,
+    userId: 1,
     title: "Tư vấn về Web Development",
     timestamp: "2024-02-28T14:20:00Z",
     messages: [
       {
         id: 7,
+        userId: 1,
         content: "Con đường trở thành Web Developer chuyên nghiệp?",
         role: "user",
         timestamp: "2024-02-28T14:20:00Z"
@@ -84,11 +86,13 @@ export const mockChats = [
   },
   {
     id: 5,
+    userId: 1,
     title: "Hỏi về Database Design",
     timestamp: "2024-02-27T11:45:00Z",
     messages: [
       {
         id: 9,
+        userId: 1,
         content: "Các nguyên tắc cơ bản khi thiết kế database?",
         role: "user",
         timestamp: "2024-02-27T11:45:00Z"

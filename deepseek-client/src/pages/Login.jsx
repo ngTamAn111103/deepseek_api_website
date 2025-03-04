@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
+import { useAuth } from '../contexts/AuthContext'; // Thêm import hook useAuth
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth(); // Lấy hàm login từ AuthContext
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -68,8 +70,11 @@ const Login = () => {
         throw new Error(data.message || 'Đăng nhập thất bại');
       }
 
-      // Lưu token vào localStorage
-      localStorage.setItem('token', data.token);
+      // Cập nhật thông tin user và token bằng hàm login
+      login({
+        ...data.user, // Giả sử server trả về user data
+        token: data.token // Thêm token vào user object
+      });
       
       // Hiển thị thông báo thành công
       setShowSuccess(true);
