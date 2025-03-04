@@ -227,5 +227,64 @@ def login():
             cursor.close()
             conn.close()
 
+# Lấy danh sách các gói nạp
+@app.route('/topup-packages', methods=['GET'])
+def get_topup_packages():
+    """Lấy danh sách các gói nạp đang hoạt động"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Lấy các gói active và sắp xếp
+        cursor.execute("""
+            SELECT id, package_name, package_price, 
+                   base_tokens, bonus_tokens, isBestSeller
+            FROM topup_packages 
+            WHERE is_active = TRUE
+            ORDER BY package_price ASC
+        """)
+        
+        packages = cursor.fetchall()
+        
+        # Format dữ liệu
+        formatted_packages = []
+        for p in packages:
+            formatted = {
+                'id': p['id'],
+                'package_name': p['package_name'],
+                'package_price': float(p['package_price']),
+                'total_tokens': p['base_tokens'] + p['bonus_tokens'],
+                'is_best_seller': bool(p['isBestSeller']),
+            }
+            formatted_packages.append(formatted)
+
+        return jsonify({
+            'success': True,
+            'message': 'Lấy danh sách gói thành công',
+            'packages': formatted_packages
+        }), 200
+
+    except mysql.connector.Error as err:
+        print("Database error:", err)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi truy vấn database'
+        }), 500
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi server'
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 if __name__ == '__main__':
     app.run(debug=True)
