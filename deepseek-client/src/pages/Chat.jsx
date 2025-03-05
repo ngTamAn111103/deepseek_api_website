@@ -32,7 +32,7 @@ const Chat = () => {
   // Effect hook kiểm tra xác thực
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate('/login'); // Chuyển về trang login nếu chưa xác thực
+      // navigate('/login'); // Chuyển về trang login nếu chưa xác thực
       return;
     }
     setChats(mockChats); // Set dữ liệu mẫu

@@ -688,6 +688,79 @@ def create_chat_session():
             cursor.close()
             conn.close()
 
+
+# Lấy danh sách phiên chat của người dùng
+@app.route('/sessions', methods=['GET'])
+def get_user_sessions():
+    # Xác thực token từ header
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({
+            'success': False,
+            'message': 'Thiếu token xác thực'
+        }), 401
+    
+    token = auth_header.split(' ')[1]
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        user_id = payload['user_id']
+    except jwt.ExpiredSignatureError:
+        return jsonify({
+            'success': False,
+            'message': 'Token đã hết hạn'
+        }), 401
+    except jwt.InvalidTokenError:
+        return jsonify({
+            'success': False,
+            'message': 'Token không hợp lệ'
+        }), 401
+
+    # Kết nối database
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # Truy vấn các phiên chat của user, sắp xếp mới nhất trước
+        cursor.execute("""
+            SELECT id, title, created_at, updated_at 
+            FROM sessions_chat 
+            WHERE user_id = %s 
+            ORDER BY created_at DESC
+        """, (user_id,))
+        sessions = cursor.fetchall()
+
+        # Format lại thời gian
+        for session in sessions:
+            session['created_at'] = session['created_at'].isoformat()
+            session['updated_at'] = session['updated_at'].isoformat() if session['updated_at'] else None
+
+        return jsonify({
+            'success': True,
+            'message': 'Lấy danh sách phiên chat thành công',
+            'sessions': sessions
+        }), 200
+
+    except mysql.connector.Error as err:
+        print("Lỗi database:", err)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi truy vấn database'
+        }), 500
+    except Exception as e:
+        print("Lỗi:", e)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi server'
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 if __name__ == '__main__':
     app.run(debug=True)
 
