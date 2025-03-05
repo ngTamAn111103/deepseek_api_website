@@ -39,18 +39,42 @@ const Chat = () => {
   }, [isAuthenticated, navigate]);
 
   // Hàm tạo chat mới
-  const handleNewChat = () => {
-    const newChat = {
-      id: Date.now(),
-      userId: user.id,
-      title: 'Cuộc trò chuyện mới',
-      timestamp: new Date().toISOString(),
-      messages: []
-    };
-    setChats(prev => [newChat, ...prev]); // Thêm chat mới vào đầu danh sách
-    setCurrentChat(newChat); // Set chat hiện tại
-    setMessages([]); // Reset tin nhắn
-    inputRef.current?.focus(); // Focus vào input
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/create-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          title: 'Cuộc trò chuyện mới'
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Không thể tạo phiên chat mới');
+      }
+      
+      const newChat = {
+        id: data.session.id,
+        userId: user.id,
+        title: data.title,
+        timestamp: new Date().toISOString(),
+        messages: []
+      };
+
+      setChats(prev => [newChat, ...prev]); // Thêm chat mới vào đầu danh sách
+      setCurrentChat(newChat); // Set chat hiện tại  
+      setMessages([]); // Reset tin nhắn
+      inputRef.current?.focus(); // Focus vào input
+
+    } catch (error) {
+      console.error('Lỗi khi tạo phiên chat:', error);
+      // TODO: Hiển thị thông báo lỗi cho người dùng
+    }
   };
 
   // Hàm chọn chat

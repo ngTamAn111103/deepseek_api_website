@@ -1,1 +1,0 @@
-pip install flask flask-cors mysql-connector-python python-dotenv openai google-auth PyJWT==1.7.1

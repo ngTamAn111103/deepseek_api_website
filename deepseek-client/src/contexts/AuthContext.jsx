@@ -39,6 +39,17 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
+  const updateUserBalance = (newBalance) => {
+    setUser(prev => ({
+      ...prev,
+      balance: newBalance
+    }));
+    // Cập nhật localStorage
+    const updatedUser = {...user, balance: newBalance};
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
+
   // 6. Hàm login để xử lý đăng nhập
   const login = (userData) => {
     // Cập nhật state và lưu thông tin vào localStorage
@@ -54,6 +65,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
   };
+  
 
   // 8. Tạo object chứa các giá trị cần chia sẻ qua context
   const value = {
@@ -61,8 +73,10 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
-    isAuthenticated: !!user // Chuyển user thành boolean
+    updateUserBalance, // Thêm hàm mới
+    isAuthenticated: !!user
   };
+
 
   // 9. Return AuthContext.Provider bao bọc children
   return (

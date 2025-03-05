@@ -1,0 +1,50 @@
+Để truy vấn tựa game "Call of Duty: Mobile Season 2" và lấy tiêu đề khuyến mãi, bạn có thể sử dụng XPath kết hợp với Selenium như sau:
+
+```python
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# Khởi tạo driver
+driver = webdriver.Chrome()
+driver.get("URL_CỦA_TRANG_WEB")
+
+# Chờ các phần tử game được load
+wait = WebDriverWait(driver, 10)
+game_items = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//div[@role='listitem']")))
+
+# Duyệt qua từng game
+for item in game_items:
+    try:
+        # Lấy tiêu đề game
+        title = item.find_element(By.XPATH, ".//span[contains(@class, 'fkdIre') and contains(@class, 'iEDKhd')]").text
+        
+        if title == "Call of Duty: Mobile Season 2":
+            # Lấy tiêu đề khuyến mãi
+            promo = item.find_element(By.XPATH, ".//div[contains(@class, 'YLCN0d') and contains(@class, 'iEDKhd')]").text
+            print("Promotion Title:", promo)
+            break
+    except:
+        continue
+
+# Đóng driver
+driver.quit()
+```
+
+Giải thích:
+1. Sử dụng XPath `//div[@role='listitem']` để tìm tất cả các game
+2. Duyệt qua từng game item và kiểm tra tiêu đề
+3. Khi tìm thấy game đích, lấy nội dung của phần tử chứa khuyến mãi
+4. Sử dụng `contains(@class)` để tránh vấn đề với class name phức tạp
+
+Lưu ý:
+- Thay thế `URL_CỦA_TRANG_WEB` bằng URL thực tế
+- Có thể cần điều chỉnh timeout trong `WebDriverWait`
+- Thêm các xử lý exception nâng cao hơn nếu cần
+- Đảm bảo driver đã được cài đặt đúng version
+
+Ví dụ kết quả đầu ra:
+```
+Promotion Title: $5 off any in-app purchase
+```

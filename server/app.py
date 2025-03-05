@@ -527,6 +527,167 @@ def confirm_transaction():
         if conn.is_connected():
             cursor.close()
             conn.close()
+
+# Tạo phiên chat mới
+@app.route('/create-session', methods=['POST'])
+def create_chat_session():
+    """Tạo mới một phiên chat"""
+    data = request.get_json()
+    
+    # Validate input
+    required_fields = ['user_id', 'title']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({
+                'success': False,
+                'message': f'Thiếu trường bắt buộc: {field}'
+            }), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Kiểm tra user tồn tại
+        cursor.execute("SELECT id FROM users WHERE id = %s", (data['user_id'],))
+        if not cursor.fetchone():
+            return jsonify({
+                'success': False,
+                'message': 'Người dùng không tồn tại'
+            }), 404
+
+        # Thêm phiên chat mới
+        cursor.execute(
+            """INSERT INTO sessions_chat (
+                user_id, 
+                title
+               ) VALUES (%s, %s)""",
+            (data['user_id'], data['title'])
+        )
+        conn.commit()
+
+        # Lấy thông tin phiên vừa tạo
+        cursor.execute(
+            """SELECT * FROM sessions_chat WHERE id = %s""",
+            (cursor.lastrowid,)
+        )
+        new_session = cursor.fetchone()
+
+        # Format thời gian
+        new_session['created_at'] = new_session['created_at'].isoformat()
+        new_session['updated_at'] = new_session['updated_at'].isoformat()
+
+        return jsonify({
+            'success': True,
+            'message': 'Tạo phiên chat thành công',
+            'session': new_session
+        }), 201
+
+    except mysql.connector.Error as err:
+        conn.rollback()
+        print("Lỗi database:", err)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi database: ' + str(err)
+        }), 500
+    except Exception as e:
+        conn.rollback()
+        print("Lỗi:", e)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi server: ' + str(e)
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+# Route tạo phiên chat
+@app.route('/create-session', methods=['POST'])
+def create_chat_session():
+    """Tạo mới một phiên chat"""
+    # Lấy dữ liệu từ request JSON
+    data = request.get_json()
+    
+    # Kiểm tra các trường bắt buộc
+    required_fields = ['user_id', 'title']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({
+                'success': False,
+                'message': f'Thiếu trường bắt buộc: {field}'
+            }), 400
+
+    # Kết nối database
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi kết nối database'
+        }), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Kiểm tra user tồn tại
+        cursor.execute("SELECT id FROM users WHERE id = %s", (data['user_id'],))
+        if not cursor.fetchone():
+            return jsonify({
+                'success': False,
+                'message': 'Người dùng không tồn tại'
+            }), 404
+
+        # Thêm phiên chat mới
+        cursor.execute(
+            """INSERT INTO sessions_chat (
+                user_id, 
+                title
+               ) VALUES (%s, %s)""",
+            (data['user_id'], data['title'])
+        )
+        conn.commit()
+
+        # Lấy thông tin phiên vừa tạo
+        cursor.execute(
+            """SELECT * FROM sessions_chat WHERE id = %s""",
+            (cursor.lastrowid,)
+        )
+        new_session = cursor.fetchone()
+
+        # Format thời gian
+        new_session['created_at'] = new_session['created_at'].isoformat()
+        new_session['updated_at'] = new_session['updated_at'].isoformat()
+
+        return jsonify({
+            'success': True,
+            'message': 'Tạo phiên chat thành công',
+            'session': new_session
+        }), 201
+
+    except mysql.connector.Error as err:
+        conn.rollback()
+        print("Lỗi database:", err)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi database: ' + str(err)
+        }), 500
+    except Exception as e:
+        conn.rollback()
+        print("Lỗi:", e)
+        return jsonify({
+            'success': False,
+            'message': 'Lỗi server: ' + str(e)
+        }), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
 if __name__ == '__main__':
     app.run(debug=True)
 

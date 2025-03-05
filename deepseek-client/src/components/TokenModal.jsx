@@ -11,7 +11,7 @@ const TokenModal = ({ isOpen, onClose }) => {
   const [loadingQR, setLoadingQR] = useState(false);
   const [transactionId, setTransactionId] = useState(null);
   const [transactionCode, setTransactionCode] = useState(null);
-  const { user } = useAuth();
+  const { user, updateUserBalance } = useAuth(); // Thêm hook
 
   // Reset state khi modal đóng
   useEffect(() => {
@@ -130,6 +130,11 @@ const TokenModal = ({ isOpen, onClose }) => {
       const data = await response.json();
       if (!data.success) {
         throw new Error(data.message || 'Không thể xác nhận giao dịch');
+      }
+
+      // Cập nhật số dư mới
+      if (data.new_balance !== undefined) {
+        updateUserBalance(data.new_balance);
       }
 
       onClose();

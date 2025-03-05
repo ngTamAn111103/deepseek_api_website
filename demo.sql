@@ -5,11 +5,11 @@ CREATE TABLE users (
     fullname VARCHAR(50) NOT NULL, -- Tên hiển thị
     email VARCHAR(100) UNIQUE NOT NULL, -- email/tài khoản
     password_hash VARCHAR(255) NOT NULL, -- mật khẩu 
-    balance DECIMAL(15,2) DEFAULT 0.00 CHECK (balance >= 0), -- số token người dùng đang có
+    balance DECIMAL(15,2) DEFAULT 500 CHECK (balance >= 0), -- số token người dùng đang có
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
-DROP TABLE users;
+
 
 
 
@@ -25,7 +25,30 @@ CREATE TABLE topup_packages (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
-DROP TABLE topup_packages;
+CREATE TABLE transactions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL, -- người nạp
+    package_id INT, -- khoá ngoại
+    amount DECIMAL(15,2) NOT NULL CHECK (amount >= 0), -- số tiền nạp (để đối chiếu với lúc nạp)
+    payment_method VARCHAR(255) NOT NULL,  -- phương thức nạp https://img.vietqr.io/image/VPBank-3528111103-qr_only.jpg?amount=${amount}&addInfo=${addInfo}&accountName=Nguyen%20Tam%20An
+    status ENUM('pending', 'success', 'failed', 'refunded') DEFAULT 'pending',
+    transaction_code VARCHAR(255) UNIQUE, -- lúc api check ok thì bỏ vào đây
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (package_id) REFERENCES topup_packages(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE sessions_chat (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL, -- người chat
+    title VARCHAR(100) NOT NULL , -- tiêu đề
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+
 INSERT INTO topup_packages (
     package_name,
     package_price,
@@ -39,16 +62,10 @@ INSERT INTO topup_packages (
 
 
 
-CREATE TABLE transactions (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT NOT NULL, -- người nạp
-    package_id INT, -- khoá ngoại
-    amount DECIMAL(15,2) NOT NULL CHECK (amount >= 0), -- số tiền nạp (để đối chiếu với lúc nạp)
-    payment_method VARCHAR(50) NOT NULL,  -- phương thức nạp
-    status ENUM('pending', 'success', 'failed', 'refunded') DEFAULT 'pending',
-    transaction_code VARCHAR(255) UNIQUE, -- lúc api check ok thì bỏ vào đây
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (package_id) REFERENCES topup_packages(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+
+
+
+
+DROP TABLE users;
+DROP TABLE topup_packages;
+drop table transactions;

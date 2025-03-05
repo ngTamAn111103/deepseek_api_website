@@ -6,8 +6,8 @@ const Login = () => {
   const { login } = useAuth(); // Lấy hàm login từ AuthContext
 
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: 'admin@gmail.com',
+    password: 'Admin123@'
   });
 
   const [errors, setErrors] = useState({
